@@ -1,0 +1,163 @@
+// timer interrupt CEC translate
+#pragma vector=TIMER0_A1_VECTOR
+__interrupt void timera0_ISR(void)
+{
+  unsigned char data;
+//  TACCTL0 &= ~CCIE;                         // Disable interrupt
+  switch(__even_in_range(Timer0_State, 18))
+  {
+    case 0: //Testing Bit timing
+            /* failing condition */
+//            TACCTL1 &= ~CCIE;               // Disable interrupt
+            CEC_State = 2;                  // Invalid start, ignore
+            printf("State 0\n");
+            Timer0_State = 2;
+            __bic_SR_register_on_exit(LPM0_bits);  // Exit LPM0
+            break;
+
+/* Transmit CEC information, Case 2 is entered when a stop condition is     */
+/* received on the I2C bus or when a retry occurs. Timer has counted up to  */
+/* TACCR0, re-started at 0 and therefor does not need to be reset.          */
+
+    case 2:                                 //Transmit start bit
+            P1DIR &= ~BIT0;                 // Set to input
+            TA0CCR0 = Sbit_Nom_HD;           // setup high duration of start bit
+            Timer0_State = 4;
+            Bit_Count = 7;
+            EOM = 0;
+            TACCR0 = CCIE;
+            printf("State 2\n");
+
+
+            break;
+
+    case 4: //2nd falling edge, start data
+            P1DIR |= BIT0;                  // Set to output
+            printf("state4\n");
+            GPIO_setOutputHighOnPin( GPIO_PORT_P1, GPIO_PIN0 );
+            data = Payload[Pldcnt];
+            data = data >> Bit_Count;       // msb first
+            data = data & 0x01;
+
+            if(data)
+            	TA0CCR0 = Dbit_High_LD;        // Set low duration of data bit
+            else TA0CCR0 = Dbit_Low_LD;
+            Timer0_State = 6;
+            TA0CCR0 = CCIE;
+            break;
+
+    case 6: //Transmit data bit, setup falling
+            P1DIR &= ~BIT0;                 // Set to input
+            printf("State 6\n");
+            GPIO_setOutputLowOnPin( GPIO_PORT_P1, GPIO_PIN0 );
+            if (TA0CCR0 == Dbit_High_LD)
+            	TA0CCR0 = Dbit_High_HD;
+            else TA0CCR0 = Dbit_Low_HD;      // Set high duration of data bit
+            if (Bit_Count == 0)
+            {
+              Pldcnt++;
+              Timer0_State = 8;
+            }
+            else
+            {
+              Timer0_State = 4;
+              Bit_Count--;
+            }
+            TA0CCR0 = CCIE;
+            break;
+
+    case 8: //falling edge of last bit of data, start EOM
+            P1DIR |= BIT0;                  // Set to output
+            printf("state 8\n");
+            GPIO_setOutputHighOnPin( GPIO_PORT_P1, GPIO_PIN0 );
+            if(Pldcnt == Pldsize)
+            {
+            	TA0CCR0 = Dbit_High_LD;        // Transition for EOM bit
+                                            //rising edge
+              EOM =1;
+            }
+            else
+            {
+              EOM = 0;
+              TA0CCR0 = Dbit_Low_LD;         //  94 -> 93
+            }
+            Timer0_State = 10;
+            TA0CCR0 = CCIE;
+            break;
+
+    case 10: //
+            P1DIR &= ~BIT0;                 // Set to input
+            printf("state 10\n");
+            GPIO_setOutputLowOnPin( GPIO_PORT_P1, GPIO_PIN0 );
+            if(EOM)
+            	TA0CCR0 = Dbit_High_HD;        // Set High duration for EOM bit
+            else TA0CCR0 = Dbit_Low_HD;
+            Timer0_State = 12;              // Recieve ack
+            TA0CCR0 = CCIE;
+            break;
+
+    case 12:                                // Setup for ACK
+            P1DIR |= BIT0;                  // Set to output
+            printf("State 12\n");
+            GPIO_setOutputHighOnPin( GPIO_PORT_P1, GPIO_PIN0 );
+            TA0CCR0 = Dbit_High_LD;          // Transmitter sets low duration
+            Timer0_State = 14;              // before recieveing Ack
+            TA0CCR0 = CCIE;
+            break;
+
+    case 14:                                // After completion of the low
+            P1DIR &= ~BIT0;                 // the CEC transmitter releases
+            printf("State 14\n");
+            GPIO_setOutputLowOnPin( GPIO_PORT_P1, GPIO_PIN0 );
+            TA0CCR0 = Ack_sample;            // Time for sampling ACK
+            Timer0_State = 16;              // Recieve ack
+            TA0CCR0 = CCIE;
+            break;
+
+    case 16:                                // Process (N)ACK
+            data = P1IN;                    // Low is an ACK
+            printf("state 16\n");
+            data &= BIT0;
+            TA0CCR0 = Ack_HD;                // Set High duration after Ack
+            if (data && !Retry)
+	        {                               // Nack Received
+              Timer0_State = 18;
+              TA0CCR0 = CCIE;
+            }
+            else if (!data && !EOM)
+            {
+              Timer0_State = 4;
+              Bit_Count = 7;                //  Get the next byte
+              TA0CCR0 = CCIE;
+            }
+            else
+            {
+              CEC_State = 0;
+              __bic_SR_register_on_exit(LPM0_bits);     // Exit LPM0
+            }
+            break;
+
+    case 18:
+            P1DIR |= BIT0;                  // Set to output
+            printf("State 18\n");
+            TA0CCR0 = Sbit_Nom_LD;           // Transition for start bit
+            Timer0_State = 2;
+            TA0CCR0 = CCIE;
+            Pldcnt = 0;
+            Retry = 1;
+            break;
+  }
+}
+
+
+	//GPIO_toggleOutputOnPin(GPIO_PORT_P4,GPIO_PIN7);
+        // Toggle the LED on/off (initial code; moved into switch statement below)
+        //GPIO_toggleOutputOnPin( GPIO_PORT_P1, GPIO_PIN0 );
+		//GPIO_toggleOutputOnPin(GPIO_PORT_P4,GPIO_PIN7);
+		
+		
+		   
+        	   //printf("Reached case 2\n");
+        	   current_time = TIMER_A_getCounterValue(TIMER_A0_BASE);
+
+        	   GPIO_interruptEdgeSelect ( GPIO_PORT_P2, GPIO_PIN7, GPIO_HIGH_TO_LOW_TRANSITION );
