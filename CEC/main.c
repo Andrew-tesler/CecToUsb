@@ -235,7 +235,6 @@ __interrupt void CEC_ISR (void)
         	   // Go to the next stage: Rising Edge
         	   CEC_State = 2;
         	   //__bic_SR_register_on_exit(LPM0_bits);
-
         	   // Debug fields
         	   debug.CECState = CEC_State;
         	   break;
@@ -254,7 +253,6 @@ __interrupt void CEC_ISR (void)
         	   if ( current_time < Sbit_Min_LD ) {
         		   // disable innterupt ?
         		   CEC_State = 0; // Invalid low duration
-
         	   }
         	   else {
         		   CEC_State = 4; // Go to next falling edge
@@ -262,7 +260,7 @@ __interrupt void CEC_ISR (void)
         	   // Debug fileds
         	   debug.CECState = CEC_State;
         	   break;
-           case 4:		// Check the duration of state2 high timing and diterming if this is valid start bit.
+           case 4:		// Check the duration of case 2 high timing and diterming if this is valid start bit.
         	   // Disable timer innterupt?
 
         	   // Halt Timer
@@ -277,17 +275,15 @@ __interrupt void CEC_ISR (void)
         	   if (current_time < Sbit_Min_TD ) {
         		   CEC_State = 0;
         	   }
-        	   else {
-        		   // Start bit is valid get ready ro recive data
-
+        	   else { // Start bit is valid get ready To recive data
         		   // Set trigger to rising edge
         		   GPIO_interruptEdgeSelect ( GPIO_PORT_P2, GPIO_PIN7, GPIO_LOW_TO_HIGH_TRANSITION );
-
         		   CEC_State = 6;
         	   }
         	   // Debug fields
         	   debug.CECState = CEC_State;
             break;
+
            case 6: // Check timing of low duration after start bit if  0.4ms > x > 0.8 Logic 1 if 1.3ms > x > 1.7ms logic 0
         	   GPIO_setOutputLowOnPin( GPIO_PORT_P1, GPIO_PIN0 );   //Debug
         	   GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN7 );   //debug
@@ -300,36 +296,30 @@ __interrupt void CEC_ISR (void)
         	   // Restart the timer
         	   TIMER_A_startCounter(TIMER_A0_BASE,TIMER_A_UP_MODE);
 
+        	   // Test timings resolv if logic 0, logic 1 or noise
         	   if (current_time > Dbit_Min_0 && current_time < Dbit_Max_0) {  // logic 0 case test
-        		   //GPIO_interruptEdgeSelect ( GPIO_PORT_P2, GPIO_PIN7, GPIO_HIGH_TO_LOW_TRANSITION );
-
         		   CEC_State = 8; // Logic 0
         	   } // end if test logic 0
-
         	   else if (current_time > Dbit_Min_1 && current_time < Dbit_Max_1) { // logic 1 case test
-        		  // GPIO_interruptEdgeSelect ( GPIO_PORT_P2, GPIO_PIN7, GPIO_HIGH_TO_LOW_TRANSITION );
-
         		   CEC_State = 10; // Logic 1
         	   } // end if test logic 1
-
-        	   else {
-        		   // data noise start over
-        		   //GPIO_interruptEdgeSelect ( GPIO_PORT_P2, GPIO_PIN7, GPIO_HIGH_TO_LOW_TRANSITION );
+        	   else {  // data noise start over
         		   CEC_State = 0;
-        	   }
-        		   //GPIO_toggleOutputOnPin(GPIO_PORT_P1,GPIO_PIN0);
+        	   } // End abnormal timing state
+        	   // Set the CEC GPIO HIGH to LOW intrupt edge
         	   GPIO_interruptEdgeSelect ( GPIO_PORT_P2, GPIO_PIN7, GPIO_HIGH_TO_LOW_TRANSITION );
         	   // Debug fields
         	   debug.CECState = CEC_State;
         	   break;
+
            case 8:  // data bit end case logic 0
         	   // Halt Timer
         	   TIMER_A_stop(TIMER_A0_BASE);
+        	   // Get corrent time
         	   current_time =  TIMER_A_getCounterValue(TIMER_A0_BASE);
-        	   //debug[n].time_1 = current_time;
         	   // Restart the timer
         	   TIMER_A_startCounter(TIMER_A0_BASE,TIMER_A_UP_MODE);
-
+        	   // Check timings of
         	   if (current_time > Dbit_Min_END && current_time < Dbit_Max_END) {
         		   // Toggle led P4.7 for debugging
         		   GPIO_setOutputHighOnPin( GPIO_PORT_P4, GPIO_PIN7 );
