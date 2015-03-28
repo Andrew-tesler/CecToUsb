@@ -217,18 +217,18 @@ __interrupt void pushbutton2_ISR (void)
 
 
 #pragma vector=PORT2_VECTOR
-__interrupt void pushbutton2_ISR (void)
+__interrupt void CEC_ISR (void)
 {
 	int current_time;
 	//unsigned char tempa;
 	GPIO_clearInterruptFlag(GPIO_PORT_P2,GPIO_PIN7); // Clear flag
 
           switch( __even_in_range( CEC_State, 12 )) {
-           case 0:
+           case 0: // Initial Hight to Low transition
 
         	   // Reset TimerA
         	   TIMER_A_clear(TIMER_A0_BASE);
-        	   // Set triger on rising edge
+        	   // Set triger on rising edge.
         	   GPIO_interruptEdgeSelect ( GPIO_PORT_P2, GPIO_PIN7, GPIO_LOW_TO_HIGH_TRANSITION );
         	   // Clear flag after toggling edge
         	   GPIO_clearInterruptFlag(GPIO_PORT_P2,GPIO_PIN7);
@@ -239,7 +239,7 @@ __interrupt void pushbutton2_ISR (void)
         	   // Debug fields
         	   debug.CECState = CEC_State;
         	   break;
-           case 2:
+           case 2: // Test start bit Low time duration test
         	   // Set trigger to falling edge
         	   GPIO_interruptEdgeSelect ( GPIO_PORT_P2, GPIO_PIN7, GPIO_HIGH_TO_LOW_TRANSITION );
         	   // Clear flag after toggling edge
@@ -262,7 +262,7 @@ __interrupt void pushbutton2_ISR (void)
         	   // Debug fileds
         	   debug.CECState = CEC_State;
         	   break;
-           case 4:		// Recive second falling age of start bit
+           case 4:		// Check the duration of state2 high timing and diterming if this is valid start bit.
         	   // Disable timer innterupt?
 
         	   // Halt Timer
@@ -288,7 +288,7 @@ __interrupt void pushbutton2_ISR (void)
         	   // Debug fields
         	   debug.CECState = CEC_State;
             break;
-           case 6: // Check the time of high bit if  0.4ms > x > 0.8 Logic 1 if 1.3ms > x > 1.7ms logic 0
+           case 6: // Check timing of low duration after start bit if  0.4ms > x > 0.8 Logic 1 if 1.3ms > x > 1.7ms logic 0
         	   GPIO_setOutputLowOnPin( GPIO_PORT_P1, GPIO_PIN0 );   //Debug
         	   GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN7 );   //debug
         	   // Clear flag after toggling edge
@@ -301,24 +301,24 @@ __interrupt void pushbutton2_ISR (void)
         	   TIMER_A_startCounter(TIMER_A0_BASE,TIMER_A_UP_MODE);
 
         	   if (current_time > Dbit_Min_0 && current_time < Dbit_Max_0) {  // logic 0 case test
-        		   GPIO_interruptEdgeSelect ( GPIO_PORT_P2, GPIO_PIN7, GPIO_HIGH_TO_LOW_TRANSITION );
+        		   //GPIO_interruptEdgeSelect ( GPIO_PORT_P2, GPIO_PIN7, GPIO_HIGH_TO_LOW_TRANSITION );
 
         		   CEC_State = 8; // Logic 0
         	   } // end if test logic 0
 
         	   else if (current_time > Dbit_Min_1 && current_time < Dbit_Max_1) { // logic 1 case test
-        		   GPIO_interruptEdgeSelect ( GPIO_PORT_P2, GPIO_PIN7, GPIO_HIGH_TO_LOW_TRANSITION );
+        		  // GPIO_interruptEdgeSelect ( GPIO_PORT_P2, GPIO_PIN7, GPIO_HIGH_TO_LOW_TRANSITION );
 
         		   CEC_State = 10; // Logic 1
         	   } // end if test logic 1
 
         	   else {
         		   // data noise start over
-        		   GPIO_interruptEdgeSelect ( GPIO_PORT_P2, GPIO_PIN7, GPIO_HIGH_TO_LOW_TRANSITION );
+        		   //GPIO_interruptEdgeSelect ( GPIO_PORT_P2, GPIO_PIN7, GPIO_HIGH_TO_LOW_TRANSITION );
         		   CEC_State = 0;
         	   }
         		   //GPIO_toggleOutputOnPin(GPIO_PORT_P1,GPIO_PIN0);
-
+        	   GPIO_interruptEdgeSelect ( GPIO_PORT_P2, GPIO_PIN7, GPIO_HIGH_TO_LOW_TRANSITION );
         	   // Debug fields
         	   debug.CECState = CEC_State;
         	   break;
